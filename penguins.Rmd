@@ -1,0 +1,280 @@
+---
+title: "Analysis of Antarctic Penguins"
+author: "Ester Rand - CS544 Final Project"
+date: 23 February 2022
+output:
+  html_document:
+    fig_width: 8
+    code_folding: hide
+    highlight: tango
+    toc: true
+    toc_float:
+      collapsed: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=8, fig.height=4,
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+## Dataset Details
+
+This dataset contains penguin data of the Palmer Archipelago (Antarctica). It was originally collected and made available by Dr. Kristen Gorman and the Palmer Station, Antarctica Long Term Ecological Research Network (LTER). Variables within dataset are:  
+
+  * species: penguin species (Chinstrap, Adélie, or Gentoo)
+  * island: island name (Dream, Torgersen, or Biscoe) in the Palmer Archipelago (Antarctica)
+  * culmen_length_mm: culmen length in millimeters (mm)
+  * culmen_depth_mm: culmen depth in millimeters (mm)
+  * flipper_length_mm: flipper length in millimeters (mm)
+  * body_mass_g: body mass in grams (g)
+  * sex: penguin sex (MALE, FEMALE, UNKNOWN)
+  
+Note: The culmen is the upper ridge of a bird's beak. 
+
+Data is available within the PAL-LTER data system (datasets #219, 220, 221):
+http://oceaninformatics.ucsd.edu/datazoo/data/pallter/datasets. 
+
+### Data Preparation
+
+NAs were removed from the data. "." within the "sex" column was replaced with "UNKNOWN". 
+
+```{r echo=TRUE}
+
+library(stringr)
+library(plotly)
+library(dbplyr)
+library(sampling)
+#Import data set and remove NAs
+#setwd("C:\\Users\\computer\\Desktop\\Ester\\BU\\MET CS544\\Final Project\\")
+penguins <- na.omit(read.csv("penguins_size.csv"))
+
+#Replace any punctuation with UNKNOWN in sex column
+penguins <- cbind(penguins[,1:6], sex = str_replace_all(penguins[,7], "[:punct:]", "UNKNOWN"))
+head(penguins, 5)
+
+#table(penguins$sex)
+
+```
+
+## Objectives
+
+The objective of this project is to gain further knowledge regarding the different types of penguins within the Palmer Archipelago by identifying the following:
+
+  * Central Limit Theorem cohesion through random samples of data using the following:
+       * Simple Random Sample Without Replacement (SWSOR), Systematic, and Stratified 
+  * Total population of each island by penguin species
+  * Determine the difference between each penguin species through the distribution of body mass
+  * Determine the difference between each penguin species through the distribution of flipper length
+  * Identifying sexual dimorphism through average body mass of each penguin species by sex
+  * Identifying sexual dimorphism through average flipper length of each penguin species by sex
+  * Conclusions and further suggestion of analysis
+  
+
+## Central Limit Theorem
+
+The central Limit Theorem states that taking random samples from a population and computing the mean for each sample will result in a normal distribution even if the population is not normally distributed. This is the case with the body mass attribute in the penguin dataset. Below shows the population distribution is askew to the left. 
+
+```{r echo = TRUE}
+#Distribution of population
+# samples <- combn(penguins[,6],2)
+# xbar <- apply(samples, 2, FUN = mean) 
+# hist(xbar, prob = TRUE)
+
+fig <- plot_ly(x = penguins[,6], type = "histogram")
+fig %>% layout(title = "Distribution of Population", xaxis = list(title = 'Body Mass (g)'), yaxis = list(title = "Frequency"))
+
+```
+
+Below are histograms showing the sample means of 1000 random samples of sample sizes 30, 40, and 60. The graphs follow a normal distribution.  
+
+```{r echo=TRUE}
+#Distribution of random samples
+set.seed(9292)
+
+mean_pen <- mean(penguins[,6])
+sd_pen <- sd(penguins[,6])
+
+samples <- 1000
+
+x <- rnorm(1000, mean = mean_pen, sd = sd_pen)
+
+xbar <- numeric(samples)
+
+paste("Population mean:", round(mean_pen))
+
+par(mfrow = c(1,1))
+
+for (size in c(30, 40, 60)) {
+	for (i in 1:samples) {
+	  xbar[i] <- mean(sample(x, size, replace = FALSE))
+    }
+
+   hist(xbar, prob = FALSE, col = "darkslategray1", xlab = "Body Mass (g)", 
+         ylim = c(0, 350), main = paste("Sample Size =", size))
+     
+   
+   cat("Sample Size = ", size, " Mean = ", mean(xbar),
+        " SD = ", sd(xbar), "\n")
+}
+
+
+par(mfrow = c(1,1)) 
+
+
+
+```
+
+## Random sampling 
+Random samples of 60 were taken using the Simple Random Sample Without Replacement (SRSWOR), Systematic, and Stratified techniques. Based on the consistency of the percentages of each species for each sampling, these samples can be used in lieu of the whole dataset (population size).
+
+```{r echo=TRUE}
+#Random sample size of 60
+sample.size <- 60
+
+#SRSWOR
+s <- srswor(sample.size, nrow(penguins))
+sample1 <- penguins[s != 0, ]
+s1 <- table(sample1$species)
+percent1 <- round(prop.table(table(sample1$species))*100)
+paste("SRSWOR: Percentage of Species for", unique(sample1$species), "is", percent1,"%")
+
+
+#Systematic
+N <- nrow(penguins)
+k <- ceiling(N / sample.size)
+r <- sample(k, 1)
+s <- seq(r, by = k, length = sample.size)
+sample2 <- na.omit(penguins[s, ])
+s2 <- table(sample2$species)   
+percent2 <- round(prop.table(table(sample2$species))*100)
+paste("Systematic: Percentage of Species for", unique(sample2$species), "is", percent2,"%")
+
+
+#Stratified
+order.index <- order(penguins$species)
+data <- penguins[order.index, ]
+freq <- table(penguins$species)
+sizes <- sample.size * freq / sum(freq)
+st <- strata(data, stratanames = c("species"), size = sizes, method = "srswor", description = FALSE)
+s3 <- table(st$species)
+percent3 <- round(prop.table(table(st$species))*100)
+paste("Stratified: Percentage of Species for", unique(st$species), "is", percent3,"%")
+
+```
+## What is the demographic makeup of each island?
+
+```{r echo=TRUE}
+
+pop_isl <- as.data.frame(table(penguins$island))
+
+pop_bis <- filter(penguins[,1:2], island == "Biscoe")
+pop_dre <- filter(penguins[,1:2], island == "Dream")
+pop_tor <- filter(penguins[,1:2], island == "Torgersen")
+
+fig <- plot_ly()
+fig <- fig %>% add_pie(pop_isl, labels = sort(unique(penguins$island)), values = pop_isl[,2], name = "Total Pop",
+       domain = list(row = 0, column = 0),
+       textinfo ='label+percent', insidetextorientation='radial')
+
+fig <- fig %>% add_pie(pop_bis, labels = sort(unique(pop_bis[,1])), values = table(pop_bis[,1]), 
+      name = "Biscoe", domain = list(row = 0, column = 1),
+      textinfo ='label+percent', insidetextorientation='radial')
+
+fig <- fig %>% add_pie(pop_dre, labels = sort(unique(pop_dre[,1])), values = table(pop_dre[,1]),
+       name = "Dream", domain = list(row = 1, column = 0),
+       textinfo ='label+percent', insidetextorientation='radial')
+
+fig <- fig %>% add_pie(pop_tor, labels = sort(unique(pop_tor[,1])), values = table(pop_tor[,1]), 
+       name = "Torgersen", domain = list(row = 1, column = 1),
+       textinfo ='label+percent', insidetextorientation='radial')
+
+fig <- fig %>% layout(title = "Species Demographic by Island", showlegend = F,
+                      grid=list(rows=2, columns=2),
+                      xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+                      yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+fig <- fig %>% layout(annotations = list(list(x = 0 , y = 0, text = "Population on Dream", showarrow = F, xref='paper',     yref='paper'), list(x = 0, y = 1, text = "Population per Island", showarrow = F, xref='paper', yref='paper'), list(x = 1, y = 0, text = "Population on Torgerson", showarrow = F, xref='paper', yref='paper'), list(x = 1, y = 1, text = "Population on Biscoe", showarrow = F, xref='paper', yref='paper')))
+
+fig
+
+```
+
+## What are the physical differences between the penguins species?
+
+### Distribution of Body Mass for Each Penguin Species
+
+```{r echo = TRUE}
+#Distribution of body mass of each penguin species
+
+plot_ly(penguins, x = ~species, y = ~body_mass_g, type = "box", color = ~species) %>%
+  layout(title = "Body Mass by Species", xaxis = list(title = 'Species'), yaxis = list(title = 'Body Mass (g)'))
+
+```
+### Distribution of Flipper Length for Each Penguin Species
+
+```{r echo = TRUE}
+#Distribution flipper length of each penguin species  
+
+plot_ly(penguins, x = ~penguins$species, y = ~penguins$flipper_length_mm, type = "box", color = ~species) %>%
+  layout(title = "Flipper Length by Species", xaxis = list(title = 'Species'), yaxis = list(title = 'Flipper Length (mm)'))
+  
+```
+
+### Distribution of Culmen Length to Depth Ratio
+
+```{r echo = TRUE}
+#Distribution culmen ratio length of each penguin species  
+cul_ratio <- penguins$culmen_length_mm/penguins$culmen_depth_mm
+
+plot_ly(penguins, x = ~species, y = cul_ratio, type = "box", color = ~species) %>%
+  layout(title = "Culmen Ratio by Species", xaxis = list(title = 'Species'), yaxis = list(title = 'Culmen Ratio (mm)'))
+  
+```
+
+## Are these differences apparent among the sexes?
+
+### Average Body Mass of Each Penguin Species by Sex
+```{r echo = TRUE}
+library(ggplot2)
+
+pbms <- penguins %>% group_by(sex, species) %>% summarise(bm = mean(body_mass_g))
+
+ggplot(pbms, aes(factor(species), bm, fill = sex)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  labs(x = "Species", y = "Body Mass (g)", title = "Average Body Mass of Each Penguin Species by Sex")
+
+```
+
+### Average Flipper Length of Each Penguin Species by Sex
+```{r echo = TRUE}
+pfls <- penguins %>% group_by(sex, species) %>% summarise(bm = mean(flipper_length_mm))
+  
+ggplot(pfls, aes(factor(species), bm, fill = sex)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  labs(x = "Species", y = "Flipper Length (mm)", title = "Average Flipper Length of Each Penguin Species by Sex")
+
+```
+
+### Average Culmen Ratio of Each Penguin Species by Sex
+```{r echo = TRUE}
+a <- cbind(penguins, cul_ratio)
+
+pcrs <- a %>% group_by(sex, species) %>% summarise(bm = mean(cul_ratio))
+  
+
+ggplot(pcrs, aes(factor(species), bm, fill = sex)) + 
+  geom_bar(stat = "identity", position = "dodge") + 
+  labs(x = "Species", y = "Culmen Ratio (mm)", title = "Average Culmen Ratio of Each Penguin Species by Sex") + ylim(0,4)
+
+```
+
+## Conclusion
+
+  * There are physical differences between penguin species with the Gentoo species show the greatest differences in body mass, flipper length, and culmen ratio. The Adelie and Chinstrap species are most similar to each other.
+  * There are differences in some attributes such as body mass and flipper length between sexes that suggest dimorphism while there are no differences in other attributes such as culmen ratio.
+  * Further analysis can be done with relation to location and evolution as well as comparing to other bird species.
+
+
+![Adélie, Chinstrap and Gentoo penguin species. Photo credit: Buzzle](pretty_penguins.jpg)
+
+
