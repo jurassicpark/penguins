@@ -1,6 +1,5 @@
 ---
 title: "Analysis of Antarctic Penguins"
-author: "Ester Rand - CS544 Final Project"
 date: 23 February 2022
 output:
   html_document:
