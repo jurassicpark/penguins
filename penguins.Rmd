@@ -44,7 +44,7 @@ library(plotly)
 library(dbplyr)
 library(sampling)
 #Import data set and remove NAs
-#setwd("C:\\Users\\computer\\Desktop\\Ester\\BU\\MET CS544\\Final Project\\")
+#setwd("file//path")
 penguins <- na.omit(read.csv("penguins_size.csv"))
 
 #Replace any punctuation with UNKNOWN in sex column
@@ -275,5 +275,6 @@ ggplot(pcrs, aes(factor(species), bm, fill = sex)) +
 
 
 ![Adélie, Chinstrap and Gentoo penguin species. Photo credit: Buzzle](pretty_penguins.jpg)
+
 
 
